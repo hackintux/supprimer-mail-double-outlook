@@ -1,0 +1,78 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName Microsoft.Office.Interop.Outlook
+
+function Show-FolderPicker {
+    $outlook = New-Object -ComObject Outlook.Application
+    $namespace = $outlook.GetNamespace("MAPI")
+    $folder = $namespace.PickFolder()
+    return $folder
+}
+
+function Remove-DuplicateMails {
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.__ComObject]$folder
+    )
+
+    $hashSet = @{}
+    $deleted = 0
+    $items = $folder.Items
+
+    # Important pour que l'ordre soit stable
+    $items.Sort("[ReceivedTime]", $false)
+
+    for ($i = $items.Count; $i -gt 0; $i--) {
+        try {
+            $mail = $items.Item($i)
+            if ($mail -is [Microsoft.Office.Interop.Outlook.MailItem]) {
+                $key = "$($mail.Subject)-$($mail.ReceivedTime.ToString())-$($mail.SenderEmailAddress)"
+                if ($hashSet.ContainsKey($key)) {
+                    $mail.Delete()
+                    $deleted++
+                } else {
+                    $hashSet[$key] = $true
+                }
+            }
+        } catch {
+            Write-Warning "Erreur à l'élément $i : $_"
+        }
+    }
+
+    return $deleted
+}
+
+# Interface graphique
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Nettoyeur de doublons Outlook"
+$form.Size = New-Object System.Drawing.Size(400, 200)
+$form.StartPosition = "CenterScreen"
+
+$buttonPick = New-Object System.Windows.Forms.Button
+$buttonPick.Text = "Choisir un dossier Outlook"
+$buttonPick.Size = New-Object System.Drawing.Size(200, 40)
+$buttonPick.Location = New-Object System.Drawing.Point(100, 30)
+
+$labelStatus = New-Object System.Windows.Forms.Label
+$labelStatus.Text = "Aucun dossier sélectionné."
+$labelStatus.AutoSize = $true
+$labelStatus.Location = New-Object System.Drawing.Point(30, 90)
+
+$buttonPick.Add_Click({
+    $folder = Show-FolderPicker
+    if ($folder -ne $null) {
+        $labelStatus.Text = "Traitement en cours du dossier : $($folder.Name)..."
+        $form.Refresh()
+
+        $count = Remove-DuplicateMails -folder $folder
+        $labelStatus.Text = "$count doublon(s) supprimé(s) dans '$($folder.Name)'."
+    } else {
+        $labelStatus.Text = "Aucun dossier sélectionné."
+    }
+})
+
+$form.Controls.Add($buttonPick)
+$form.Controls.Add($labelStatus)
+$form.Topmost = $true
+$form.Add_Shown({ $form.Activate() })
+[void]$form.ShowDialog()
