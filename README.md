@@ -2,7 +2,7 @@
 
 Voici un script powershell avec interface graphique (WinForms) permettant de sélectionner un dossier dans Outlook et de supprimer les mails en double dans ce dossier.
 
-#🧰 Mode d'emploi
+🧰 Mode d'emploi
 
 Lance Outlook avant de lancer ce script.
 
